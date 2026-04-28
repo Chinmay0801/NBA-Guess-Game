@@ -261,6 +261,15 @@ function evaluateGuess(guessed) {
     }
   }
 
+  // Unlock All Teams on second miss
+  if (currentGuesses === 2 && !isCorrect) {
+    const blurCells = careerStatsBody.querySelectorAll('.team-blur');
+    blurCells.forEach(cell => {
+      cell.classList.remove('team-blur');
+      cell.style.color = '#38bdf8';
+    });
+  }
+
   guessing = false;
   if (isCorrect) {
     endGame(true);
