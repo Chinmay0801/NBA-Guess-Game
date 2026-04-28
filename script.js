@@ -4,12 +4,23 @@ let targetPlayer = null;
 let currentGuesses = 0;
 const MAX_GUESSES = 4;
 let guessing = false;
+let isDailyMode = true;
 
+// Stats Persistence
 let userStats = JSON.parse(localStorage.getItem('nbaStats')) || {
   played: 0,
   wins: 0,
   currentStreak: 0,
   maxStreak: 0
+};
+
+// Daily State Persistence
+let dailyState = JSON.parse(localStorage.getItem('nbaDailyState')) || {
+  date: "",
+  guesses: [],
+  status: "playing",
+  clue1Unlocked: false,
+  clue2Unlocked: false
 };
 
 // DOM Elements
@@ -18,6 +29,10 @@ const autocompleteList = document.getElementById('autocomplete-list');
 const guessBtn = document.getElementById('guess-btn');
 const guessesBody = document.getElementById('guesses-body');
 const guessesCountText = document.getElementById('guesses-count');
+
+// Mode Toggle
+const btnDaily = document.getElementById('mode-daily');
+const btnPractice = document.getElementById('mode-practice');
 
 // Career Stats
 const careerStatsBody = document.getElementById('career-stats-body');
@@ -55,6 +70,32 @@ closeStatsBtn.addEventListener('click', () => {
   userStatsModal.classList.add('hidden');
 });
 
+// Pseudo-Random Hash for Daily
+function cyrb128(str) {
+    let h1 = 1779033703, h2 = 3144134277,
+        h3 = 1013904242, h4 = 2773480762;
+    for (let i = 0, k; i < str.length; i++) {
+        k = str.charCodeAt(i);
+        h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+        h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+        h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+        h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+    }
+    h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+    h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+    h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+    h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+    return (h1^h2^h3^h4)>>>0;
+}
+
+function getDailyRandomIndex(max) {
+  // Use today's date local to the user
+  const today = new Date().toLocaleDateString('en-CA'); // 'YYYY-MM-DD'
+  const seed = cyrb128(today + "BALLDONTCRY_NBA");
+  const rand = (seed * 1664525 + 1013904223) % 4294967296;
+  return rand % max;
+}
+
 async function fetchPlayersList() {
   searchInput.placeholder = "Loading game data...";
   searchInput.disabled = true;
@@ -67,6 +108,9 @@ async function fetchPlayersList() {
     // Filter out players with absolutely no stats
     allPlayers = allPlayers.filter(p => p.stats_history && p.stats_history.length > 0);
     
+    // Sort so array is deterministic every time
+    allPlayers.sort((a,b) => a.id - b.id);
+
     searchInput.placeholder = "Guess the player...";
     searchInput.disabled = false;
     guessBtn.disabled = false;
@@ -75,6 +119,21 @@ async function fetchPlayersList() {
     searchInput.placeholder = "Error loading data.json";
   }
 }
+
+function switchMode(isDaily) {
+  isDailyMode = isDaily;
+  if (isDaily) {
+    btnDaily.classList.add('active');
+    btnPractice.classList.remove('active');
+  } else {
+    btnPractice.classList.add('active');
+    btnDaily.classList.remove('active');
+  }
+  initGame();
+}
+
+btnDaily.addEventListener('click', () => { if(!isDailyMode) switchMode(true); });
+btnPractice.addEventListener('click', () => { if(isDailyMode) switchMode(false); });
 
 function initGame() {
   if (allPlayers.length === 0) return;
@@ -93,11 +152,37 @@ function initGame() {
   btnClue1.disabled = true;
   btnClue2.disabled = true;
   resultModal.classList.add('hidden');
-
-  // Pick random target
-  const randIndex = Math.floor(Math.random() * allPlayers.length);
-  targetPlayer = allPlayers[randIndex];
   
+  // Clues setup
+  btnClue1.disabled = false;
+  btnClue2.disabled = false;
+  clue1Text.classList.add('hidden');
+  clue2Text.classList.add('hidden');
+
+  if (isDailyMode) {
+    // Check if daily needs reset
+    const today = new Date().toLocaleDateString('en-CA');
+    if (dailyState.date !== today) {
+      dailyState = {
+        date: today,
+        guesses: [],
+        status: "playing",
+        clue1Unlocked: false,
+        clue2Unlocked: false
+      };
+      saveDailyState();
+    }
+    const idx = getDailyRandomIndex(allPlayers.length);
+    targetPlayer = allPlayers[idx];
+  } else {
+    // Practice
+    const randIndex = Math.floor(Math.random() * allPlayers.length);
+    targetPlayer = allPlayers[randIndex];
+  }
+
+  clue1Text.textContent = `Age: ${targetPlayer.age} | Jersey: #${targetPlayer.jerseyNumber}`;
+  clue2Text.textContent = `Origin/College: ${targetPlayer.college || 'Unknown'}`;
+
   // Display Career Stats Table
   if (targetPlayer.stats_history) {
     targetPlayer.stats_history.forEach(season => {
@@ -122,29 +207,42 @@ function initGame() {
     });
   }
 
-  // Reset Clues
-  btnClue1.disabled = false;
-  btnClue2.disabled = false;
-  clue1Text.classList.add('hidden');
-  clue2Text.classList.add('hidden');
-  clue1Text.textContent = `Age: ${targetPlayer.age} | Jersey: #${targetPlayer.jerseyNumber}`;
-  clue2Text.textContent = `Origin/College: ${targetPlayer.college || 'Unknown'}`;
-  
   searchInput.disabled = false;
   guessBtn.disabled = false;
   searchInput.focus();
+
+  // If daily mode, restore previous guesses and state
+  if (isDailyMode) {
+    if (dailyState.clue1Unlocked) unlockClue(1, false);
+    if (dailyState.clue2Unlocked) unlockClue(2, false);
+    
+    // Evaluate restored guesses without saving them again
+    for (let g of dailyState.guesses) {
+      const p = allPlayers.find(x => x.name === g);
+      if (p) processGuessLogic(p, true);
+    }
+  }
 }
 
 // Clue Listeners
-btnClue1.addEventListener('click', () => {
-  clue1Text.classList.remove('hidden');
-  btnClue1.disabled = true;
-});
+btnClue1.addEventListener('click', () => unlockClue(1, true));
+btnClue2.addEventListener('click', () => unlockClue(2, true));
 
-btnClue2.addEventListener('click', () => {
-  clue2Text.classList.remove('hidden');
-  btnClue2.disabled = true;
-});
+function unlockClue(num, doSave) {
+  if (num === 1) {
+    clue1Text.classList.remove('hidden');
+    btnClue1.disabled = true;
+    if (isDailyMode && doSave) { dailyState.clue1Unlocked = true; saveDailyState(); }
+  } else {
+    clue2Text.classList.remove('hidden');
+    btnClue2.disabled = true;
+    if (isDailyMode && doSave) { dailyState.clue2Unlocked = true; saveDailyState(); }
+  }
+}
+
+function saveDailyState() {
+  localStorage.setItem('nbaDailyState', JSON.stringify(dailyState));
+}
 
 // Autocomplete
 searchInput.addEventListener('input', function() {
@@ -198,12 +296,16 @@ function handleGuess() {
   searchInput.value = '';
   autocompleteList.classList.add('hidden');
   
-  evaluateGuess(guessedPlayer);
+  if (isDailyMode) {
+    dailyState.guesses.push(guessedPlayer.name);
+    saveDailyState();
+  }
+
+  processGuessLogic(guessedPlayer, false);
 }
 
-function evaluateGuess(guessed) {
+function processGuessLogic(guessed, isRestoring) {
   const isCorrect = guessed.name === targetPlayer.name;
-  
   const row = document.createElement('tr');
   
   // Name
@@ -226,7 +328,7 @@ function evaluateGuess(guessed) {
   }
   row.appendChild(createCell(guessed.division, divMatch));
   
-  // Pos - allowing partial if "G-F" matching "F" etc.
+  // Pos
   let posMatch = 'match-wrong';
   if (guessed.position === targetPlayer.position) {
     posMatch = 'match-correct';
@@ -253,7 +355,7 @@ function evaluateGuess(guessed) {
   guessesCountText.textContent = `${currentGuesses}/${MAX_GUESSES}`;
 
   // Unlock Rookie Team on first miss
-  if (currentGuesses === 1 && !isCorrect) {
+  if (currentGuesses >= 1 && !isCorrect) {
     const firstRowTeamCell = careerStatsBody.querySelector('tr td.team-blur');
     if (firstRowTeamCell) {
       firstRowTeamCell.classList.remove('team-blur');
@@ -262,7 +364,7 @@ function evaluateGuess(guessed) {
   }
 
   // Unlock All Teams on second miss
-  if (currentGuesses === 2 && !isCorrect) {
+  if (currentGuesses >= 2 && !isCorrect) {
     const blurCells = careerStatsBody.querySelectorAll('.team-blur');
     blurCells.forEach(cell => {
       cell.classList.remove('team-blur');
@@ -271,10 +373,11 @@ function evaluateGuess(guessed) {
   }
 
   guessing = false;
+  
   if (isCorrect) {
-    endGame(true);
+    endGame(true, isRestoring);
   } else if (currentGuesses >= MAX_GUESSES) {
-    endGame(false);
+    endGame(false, isRestoring);
   }
 }
 
@@ -295,23 +398,33 @@ function getNumberComparison(guessedVal, targetVal, displayStr) {
   }
 }
 
-function endGame(isWin) {
+function endGame(isWin, isRestoring) {
   searchInput.disabled = true;
   guessBtn.disabled = true;
   
-  // Update Stats
-  userStats.played++;
-  if (isWin) {
-    userStats.wins++;
-    userStats.currentStreak++;
-    if (userStats.currentStreak > userStats.maxStreak) {
-      userStats.maxStreak = userStats.currentStreak;
+  // Update Stats ONLY if Daily Mode and NOT restoring from previous session
+  if (isDailyMode && !isRestoring && dailyState.status === "playing") {
+    userStats.played++;
+    if (isWin) {
+      userStats.wins++;
+      userStats.currentStreak++;
+      if (userStats.currentStreak > userStats.maxStreak) {
+        userStats.maxStreak = userStats.currentStreak;
+      }
+      dailyState.status = "won";
+    } else {
+      userStats.currentStreak = 0;
+      dailyState.status = "lost";
     }
+    localStorage.setItem('nbaStats', JSON.stringify(userStats));
+    saveDailyState();
+  }
+
+  if (isWin) {
     resultTitle.textContent = "You Win!";
     resultTitle.style.color = "#22c55e";
     resultMessage.textContent = `You deduced ${targetPlayer.name} correctly.`;
   } else {
-    userStats.currentStreak = 0;
     resultTitle.textContent = "Game Over";
     resultTitle.style.color = "#ef4444";
     resultMessage.textContent = `The player was ${targetPlayer.name}.`;
@@ -321,11 +434,20 @@ function endGame(isWin) {
     blurCells.forEach(cell => cell.classList.remove('team-blur'));
   }
   
-  localStorage.setItem('nbaStats', JSON.stringify(userStats));
+  // Hide play again button if in daily mode
+  if (isDailyMode) {
+    playAgainBtn.classList.add('hidden');
+    resultMessage.innerHTML += `<br><br><small>Come back tomorrow for the next daily challenge!</small>`;
+  } else {
+    playAgainBtn.classList.remove('hidden');
+  }
+
   resultModal.classList.remove('hidden');
 }
 
-playAgainBtn.addEventListener('click', initGame);
+playAgainBtn.addEventListener('click', () => {
+  if (!isDailyMode) initGame();
+});
 
 // Initialization
 window.onload = async () => {
