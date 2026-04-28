@@ -1,0 +1,40 @@
+The Story of Ball Don't Cry
+===========================
+
+The Inspiration
+---------------
+The idea for "Ball Don't Cry" was born out of an obsession with the recent explosion of daily guessing games. It started with Wordle, which proved that the world loves a daily, unified puzzle that everyone solves together. Soon after, the sports world got its own versions, most notably "Poeltl" (the NBA player guessing game). 
+
+However, games like Poeltl only gave you basic attributes: Height, Age, Team, Conference, and Position. While fun, it felt like it was missing the core of what basketball fans actually argue about—the stats! I wanted to build a game that felt like looking at a basketball card or a Basketball-Reference page. Instead of just guessing based on physical traits, what if you had to identify a player based purely on their raw career trajectory, points per game, and shooting percentages? 
+
+That's how "Ball Don't Cry" was conceptualized. The name is a play on Rasheed Wallace's famous phrase "Ball Don't Lie"—because the stats tell the true story of the player.
+
+The Challenge & The Architecture
+--------------------------------
+When I started building this from scratch, the biggest hurdle was data. To make the game work, I needed access to multi-season career stats for over 500 active NBA players. 
+
+Initially, I thought about building a live Python backend using the Flask framework. The idea was that every time a user guessed a player, the server would ping the official NBA API, fetch the stats, and send it back to the website. But there was a massive flaw with this approach: 
+1. The NBA API rate-limits aggressive traffic. If 100 people played the game at the same time, the server would crash, and my IP would get banned.
+2. Server hosting costs money, and it introduces loading-screen latency for the user.
+
+The Breakthrough: A Pure Static Game
+------------------------------------
+I realized the best way to build this was to completely detach the backend from the frontend. 
+
+Instead of hitting the NBA API live, I wrote a Python "Builder" script (`build_db.py`). This script runs locally on my computer, politely pinging the NBA API once every 0.4 seconds to fetch the complete biographies and career tables of all 530 active players. It packages all this data into a single, massive 1.5MB text file called `data.json`.
+
+By doing this, the game became incredibly powerful. The website itself is now just a "Static Frontend" (HTML, CSS, JavaScript). When a user visits the site, their browser downloads the `data.json` file once, and all the guessing logic happens instantly on their own device. 
+
+The Wordle Mechanic (Without a Server!)
+---------------------------------------
+The final piece of the puzzle was the "Daily Mode." The magic of Wordle is that everyone in the world is guessing the exact same word. Normally, a backend server tells the website "Today's word is X." 
+
+Since I had deleted the backend to save costs and increase speed, I had to get creative. I implemented a mathematical algorithm in JavaScript called a "Seeded Randomizer." The code looks at the user's local calendar date (e.g., "April 28, 2026") and uses that string of text to generate a specific, highly pseudo-random number. That number maps to an index in the `data.json` file. 
+
+Because mathematics is universal, every single phone and computer in the world computing the formula for "April 28, 2026" will land on the exact same player, completely independently!
+
+The Result
+----------
+What started as an idea inspired by Poeltl is now a lightning-fast, zero-maintenance, infinitely scalable web app. Hosted on Vercel for free, it tracks user statistics using browser local storage, features both Daily and Practice modes, and never has to worry about the NBA API going down during a game. 
+
+It was a journey from a clunky server-dependent prototype to a sleek, mathematical, static masterpiece!
