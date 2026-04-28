@@ -4,9 +4,6 @@ let targetPlayer = null;
 let currentGuesses = 0;
 const MAX_GUESSES = 4;
 let guessing = false;
-const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') 
-  ? 'http://127.0.0.1:5000/api' 
-  : '/api';
 
 let userStats = JSON.parse(localStorage.getItem('nbaStats')) || {
   played: 0,
@@ -59,20 +56,29 @@ closeStatsBtn.addEventListener('click', () => {
 });
 
 async function fetchPlayersList() {
-  searchInput.placeholder = "Loading players...";
+  searchInput.placeholder = "Loading game data...";
   searchInput.disabled = true;
+  guessBtn.disabled = true;
   try {
-    const res = await fetch(`${API_BASE}/players`);
+    const res = await fetch('data.json');
+    if (!res.ok) throw new Error("Could not load data.json");
     allPlayers = await res.json();
+    
+    // Filter out players with absolutely no stats
+    allPlayers = allPlayers.filter(p => p.stats_history && p.stats_history.length > 0);
+    
     searchInput.placeholder = "Guess the player...";
     searchInput.disabled = false;
+    guessBtn.disabled = false;
   } catch (err) {
     console.error("Failed to load players list", err);
-    searchInput.placeholder = "Error connecting to server";
+    searchInput.placeholder = "Error loading data.json";
   }
 }
 
-async function initGame() {
+function initGame() {
+  if (allPlayers.length === 0) return;
+
   currentGuesses = 0;
   guessing = false;
   
@@ -82,24 +88,17 @@ async function initGame() {
   autocompleteList.innerHTML = '';
   autocompleteList.classList.add('hidden');
   guessesBody.innerHTML = '';
-  careerStatsBody.innerHTML = '<tr><td colspan="14" style="text-align:center;">Loading random active player... (Takes ~2s)</td></tr>';
+  careerStatsBody.innerHTML = '';
   
   btnClue1.disabled = true;
   btnClue2.disabled = true;
-  searchInput.disabled = true;
-  guessBtn.disabled = true;
   resultModal.classList.add('hidden');
 
-  try {
-    const res = await fetch(`${API_BASE}/random_target`);
-    targetPlayer = await res.json();
-  } catch (err) {
-    careerStatsBody.innerHTML = '<tr><td colspan="14" style="text-align:center;">Failed to connect to Python server. Make sure it is running.</td></tr>';
-    return;
-  }
+  // Pick random target
+  const randIndex = Math.floor(Math.random() * allPlayers.length);
+  targetPlayer = allPlayers[randIndex];
   
   // Display Career Stats Table
-  careerStatsBody.innerHTML = '';
   if (targetPlayer.stats_history) {
     targetPlayer.stats_history.forEach(season => {
       const tr = document.createElement('tr');
@@ -131,9 +130,9 @@ async function initGame() {
   clue1Text.textContent = `Age: ${targetPlayer.age} | Jersey: #${targetPlayer.jerseyNumber}`;
   clue2Text.textContent = `Origin/College: ${targetPlayer.college || 'Unknown'}`;
   
-  // Enable Inputs
   searchInput.disabled = false;
   guessBtn.disabled = false;
+  searchInput.focus();
 }
 
 // Clue Listeners
@@ -184,13 +183,13 @@ searchInput.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') handleGuess();
 });
 
-async function handleGuess() {
+function handleGuess() {
   if (guessing || currentGuesses >= MAX_GUESSES) return;
   
   const guessName = searchInput.value.trim();
-  const guessedPlayerBasic = allPlayers.find(p => p.name.toLowerCase() === guessName.toLowerCase());
+  const guessedPlayer = allPlayers.find(p => p.name.toLowerCase() === guessName.toLowerCase());
   
-  if (!guessedPlayerBasic) {
+  if (!guessedPlayer) {
     alert("Player not found! Select from the dropdown.");
     return;
   }
@@ -198,27 +197,8 @@ async function handleGuess() {
   guessing = true;
   searchInput.value = '';
   autocompleteList.classList.add('hidden');
-  guessBtn.disabled = true;
-  guessBtn.textContent = '...';
   
-  // Fetch the guessed player's full attributes from API
-  try {
-    const res = await fetch(`${API_BASE}/player/${encodeURIComponent(guessedPlayerBasic.name)}`);
-    const guessedPlayer = await res.json();
-    if (guessedPlayer.error) {
-      alert("Error retrieving player data.");
-      guessing = false;
-      guessBtn.disabled = false;
-      guessBtn.textContent = 'Guess';
-      return;
-    }
-    evaluateGuess(guessedPlayer);
-  } catch(err) {
-    alert("API Error");
-    guessing = false;
-    guessBtn.disabled = false;
-    guessBtn.textContent = 'Guess';
-  }
+  evaluateGuess(guessedPlayer);
 }
 
 function evaluateGuess(guessed) {
@@ -281,16 +261,12 @@ function evaluateGuess(guessed) {
     }
   }
 
-  setTimeout(() => {
-    guessing = false;
-    guessBtn.disabled = false;
-    guessBtn.textContent = 'Guess';
-    if (isCorrect) {
-      endGame(true);
-    } else if (currentGuesses >= MAX_GUESSES) {
-      endGame(false);
-    }
-  }, 100); 
+  guessing = false;
+  if (isCorrect) {
+    endGame(true);
+  } else if (currentGuesses >= MAX_GUESSES) {
+    endGame(false);
+  }
 }
 
 function createCell(htmlContent, matchClass) {

@@ -1,16 +1,13 @@
 import json
-from flask import Flask, jsonify
-from flask_cors import CORS
+import time
 from datetime import datetime
 from nba_api.stats.static import players
 from nba_api.stats.endpoints import commonplayerinfo, playercareerstats
 
-app = Flask(__name__)
-CORS(app)
-
-# Cache active players on startup
 all_players = players.get_players()
-ACTIVE_PLAYERS = [p for p in all_players if p['is_active']]
+active_players = [p for p in all_players if p['is_active']]
+
+db = []
 
 def calc_age(birthdate_str):
     try:
@@ -19,18 +16,23 @@ def calc_age(birthdate_str):
     except:
         return 0
 
-def fetch_player_data(player_id, name):
+print(f"Fetching data for {len(active_players)} players...")
+
+for idx, p in enumerate(active_players):
+    print(f"[{idx+1}/{len(active_players)}] Fetching {p['full_name']}...")
     try:
-        info_resp = commonplayerinfo.CommonPlayerInfo(player_id=player_id)
+        info_resp = commonplayerinfo.CommonPlayerInfo(player_id=p['id'])
         info = info_resp.get_normalized_dict()['CommonPlayerInfo'][0]
 
-        career_resp = playercareerstats.PlayerCareerStats(player_id=player_id, per_mode36='PerGame')
+        career_resp = playercareerstats.PlayerCareerStats(player_id=p['id'], per_mode36='PerGame')
         career = career_resp.get_normalized_dict()['SeasonTotalsRegularSeason']
         
+        # Build Stats Array
         stats = []
         for season in career:
             gp = season.get("GP", 0)
-            if gp == 0: continue
+            if gp == 0:
+                continue
             stats.append({
                 "Season": season["SEASON_ID"],
                 "Team": season["TEAM_ABBREVIATION"],
@@ -62,9 +64,8 @@ def fetch_player_data(player_id, name):
         except:
             draft_year = "Undrafted"
 
-        return {
-            "name": name,
-            "id": player_id,
+        player_obj = {
+            "name": p['full_name'],
             "team": info.get("TEAM_ABBREVIATION", "UNK"),
             "conference": info.get("TEAM_CONFERENCE", "East"),
             "division": info.get("TEAM_DIVISION", "Atlantic"),
@@ -78,33 +79,13 @@ def fetch_player_data(player_id, name):
             "college": info.get("SCHOOL", "Unknown"),
             "stats_history": stats
         }
+        db.append(player_obj)
+        time.sleep(0.4) # Prevent rate limiting
     except Exception as e:
-        print(e)
-        return None
+        print(f"Error fetching {p['full_name']}: {e}")
 
-@app.route('/api/players')
-def get_players():
-    # Return minimal info for autocomplete
-    return jsonify([{"name": p['full_name'], "id": p['id']} for p in ACTIVE_PLAYERS])
+# Save directly to JSON
+with open("data.json", "w") as f:
+    json.dump(db, f, indent=2)
 
-import random
-@app.route('/api/random_target')
-def get_random_target():
-    # Keep picking until we find someone with stats (avoid rookies who haven't played yet)
-    while True:
-        p = random.choice(ACTIVE_PLAYERS)
-        data = fetch_player_data(p['id'], p['full_name'])
-        if data and len(data['stats_history']) > 0:
-            return jsonify(data)
-
-@app.route('/api/player/<name>')
-def get_player(name):
-    # Find player in ACTIVE_PLAYERS
-    p = next((x for x in ACTIVE_PLAYERS if x['full_name'].lower() == name.lower()), None)
-    if not p:
-        return jsonify({"error": "Player not found"}), 404
-    data = fetch_player_data(p['id'], p['full_name'])
-    return jsonify(data)
-
-if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+print(f"Successfully built data.json with {len(db)} players!")
