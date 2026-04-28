@@ -19,7 +19,8 @@ def calc_age(birthdate_str):
 print(f"Fetching data for {len(active_players)} players...")
 
 for idx, p in enumerate(active_players):
-    print(f"[{idx+1}/{len(active_players)}] Fetching {p['full_name']}...")
+    safe_name = p['full_name'].encode('ascii', 'ignore').decode()
+    print(f"[{idx+1}/{len(active_players)}] Fetching {safe_name}...")
     try:
         info_resp = commonplayerinfo.CommonPlayerInfo(player_id=p['id'])
         info = info_resp.get_normalized_dict()['CommonPlayerInfo'][0]
