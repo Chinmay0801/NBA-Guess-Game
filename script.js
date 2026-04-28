@@ -48,6 +48,11 @@ const resultModal = document.getElementById('result-modal');
 const resultTitle = document.getElementById('result-title');
 const resultMessage = document.getElementById('result-message');
 const playAgainBtn = document.getElementById('play-again-btn');
+const closeResultBtn = document.getElementById('close-result-btn');
+
+closeResultBtn.addEventListener('click', () => {
+  resultModal.classList.add('hidden');
+});
 
 // Stats Modal
 const userStatsModal = document.getElementById('user-stats-modal');
