@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BALL DON'T CRY</title>
+  <link rel="stylesheet" href="style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;600&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="game-header">
+      <div class="logo">BALL DON'T CRY 🎃</div>
+      <div class="status-bar">
+        <span>Apr 28, 2026</span>
+        <button id="show-stats-btn" class="btn-stats">📊 Stats</button>
+        <span id="guesses-count">0/4</span>
+      </div>
+    </header>
+
+    <div class="career-stats-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Season</th>
+            <th>Tm</th>
+            <th>G</th>
+            <th>MIN</th>
+            <th>PTS</th>
+            <th>REB</th>
+            <th>AST</th>
+            <th>FG%</th>
+            <th>3PM</th>
+            <th>3P%</th>
+            <th>FT%</th>
+            <th>STL</th>
+            <th>BLK</th>
+            <th>TOV</th>
+          </tr>
+        </thead>
+        <tbody id="career-stats-body">
+          <!-- Populated by JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="controls-container">
+      <button id="unlock-clue-1" class="btn-clue">Unlock Age/Jersey Clue</button>
+      <button id="unlock-clue-2" class="btn-clue">Unlock College Clue</button>
+    </div>
+    
+    <div class="clue-messages">
+      <p id="clue-1-text" class="hidden clue-text"></p>
+      <p id="clue-2-text" class="hidden clue-text"></p>
+    </div>
+
+    <div class="search-section">
+      <div class="autocomplete-wrapper">
+        <input type="text" id="player-search" placeholder="Guess the player..." autocomplete="off">
+        <ul id="autocomplete-list" class="autocomplete-items hidden"></ul>
+      </div>
+      <button id="guess-btn" class="btn-primary">Guess</button>
+    </div>
+
+    <div class="matrix-container">
+      <table class="data-table matrix-table">
+        <thead>
+          <tr>
+            <th>Player</th>
+            <th>Team</th>
+            <th>Conf</th>
+            <th>Div</th>
+            <th>Pos</th>
+            <th>Height</th>
+            <th>Age</th>
+            <th>#</th>
+          </tr>
+        </thead>
+        <tbody id="guesses-body">
+          <!-- Rows added via JS -->
+        </tbody>
+      </table>
+    </div>
+
+    <div id="result-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2 id="result-title"></h2>
+        <p id="result-message"></p>
+        <button id="play-again-btn" class="btn-primary">Play Again</button>
+      </div>
+    </div>
+
+    <!-- User Stats Modal -->
+    <div id="user-stats-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2>Your Statistics</h2>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div id="stat-played" class="stat-value">0</div>
+            <div class="stat-label">Played</div>
+          </div>
+          <div class="stat-box">
+            <div id="stat-winpct" class="stat-value">0</div>
+            <div class="stat-label">Win %</div>
+          </div>
+          <div class="stat-box">
+            <div id="stat-streak" class="stat-value">0</div>
+            <div class="stat-label">Current Streak</div>
+          </div>
+          <div class="stat-box">
+            <div id="stat-maxstreak" class="stat-value">0</div>
+            <div class="stat-label">Max Streak</div>
+          </div>
+        </div>
+        <button id="close-stats-btn" class="btn-primary" style="margin-top:1.5rem;">Close</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
